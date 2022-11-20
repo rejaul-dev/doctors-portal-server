@@ -25,8 +25,8 @@ async function run() {
       .collection("appointmentOptions");
 
     const bookingsCollection = client
-    .db("doctorsPortal")
-    .collection("bookings");
+      .db("doctorsPortal")
+      .collection("bookings");
 
     /**
      * API Naming Convention
@@ -37,16 +37,48 @@ async function run() {
      * app.delete('bookings/:id')
      * */
 
-    app.post('/bookings', async(req, res)=>{
+    app.post("/bookings", async (req, res) => {
       const booking = req.body;
-      console.log(booking)
-      const result = await bookingsCollection.insertOne(booking)
-      res.send(result)
-    })
+      console.log(booking);
+      const query = {
+        appointmentDate: booking.appointmentDate,
+        email: booking.email,
+        treatment: booking.treatment,
+      };
+      const alreadyBooked = await bookingsCollection.find(query).toArray();
 
+      if (alreadyBooked.length) {
+        const message = `you already have a booking on ${booking.appointmentDate}`;
+        return res.send({ acknowledged: false, message });
+      }
+
+      const result = await bookingsCollection.insertOne(booking);
+      res.send(result);
+    });
+
+    // use aggregate to query multiple collection and then merge data
     app.get("/appointmentOptions", async (req, res) => {
+      const date = req.query.date;
       const query = {};
       const options = await appointmentOptionCollection.find(query).toArray();
+
+      // get the booking of the provided date
+      const bookingQuery = { appointmentDate: date };
+      const alreadyBooked = await bookingsCollection
+        .find(bookingQuery)
+        .toArray();
+
+      // code carefully :D
+      options.forEach((option) => {
+        const optionBooked = alreadyBooked.filter(
+          (book) => book.treatment === option.name
+        );
+        const bookedSlots = optionBooked.map((book) => book.slot);
+        const remainingSlots = option.slots.filter(
+          (slot) => !bookedSlots.includes(slot)
+        );
+        option.slots = remainingSlots;
+      });
       res.send(options);
     });
   } finally {
