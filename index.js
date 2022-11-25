@@ -149,7 +149,7 @@ async function run() {
       res.send(options);
     });
 
-    app.post("create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent", async (req, res) => {
       const booking = req.body;
       const price = booking.price;
       const amount = price * 100;
@@ -157,9 +157,8 @@ async function run() {
       const paymentIntent = await stripe.paymentIntents.create({
         currency: "usd",
         amount: amount,
-        "payment-method-types": ["card"],
+        payment_method_types: ["card"],
       });
-
       res.send({
         clientSecret: paymentIntent.client_secret,
       });
@@ -168,6 +167,15 @@ async function run() {
     app.post("/payments", async (req, res) => {
       const payment = req.body;
       const result = await paymentsCollection.insertOne(payment);
+      const id = payment.bookingId;
+      const filter = {_id: ObjectId(id)}
+      const updatedDoc ={
+        $set:{
+          paid: true,
+          transactionId: payment.transactionId
+        }
+      }
+      const updatedResult = await bookingsCollection.updateOne(filter, updatedDoc)
       res.send(result);
     });
 
